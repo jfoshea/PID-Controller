@@ -5,14 +5,16 @@
 
 typedef enum 
 {
-  Kp_PARAM = 0,
-  Ki_PARAM,
-  Kd_PARAM,
+  INCREASE_P = 0,
+  RESAMPLE_P,
+  DECREASE_2P,
+  RESAMPLE_2P,
   PARAM_LAST
 } PID_PARAM_S;
 
 class PID {
 public:
+  
   // Errors
   double p_error;
   double i_error;
@@ -23,24 +25,34 @@ public:
   double Ki;
   double Kd;
 
-  double dpp;
-  double dpi;
-  double dpd;
+  const double TOLERANCE = 0.01;
+  double best_error = 999.9;
+  const int sample_interval = 50;
+  int sample_index;
+  std::vector<double> p;
+  std::vector<double> dp;
 
-  int eval_count;
-  const int num_evals = 200;  
+  int tune_state;
+  int next_state;
+  int K_index;
+  int next_index;
 
+  // Constructor
   PID();
 
+  // Destructor.
   virtual ~PID();
 
-  void Init(double Kp, double Ki, double Kd);
+  // Initialize PID.
+  void Init( double Kp, double Ki, double Kd );
 
-  void UpdateError(double cte);
+  // Update the PID error variables given cross track error.
+  void UpdateError( double cte );
 
-  double TotalError();
-  
-  void FindCoefficients( const double total_error );
+  // Get the Steering Value (total PID error).
+  double GetSteerValue();
+
+  void AutoTuneController( double cte );
 };
 
 #endif /* PID_H */

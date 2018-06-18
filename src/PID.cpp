@@ -1,130 +1,166 @@
 #include "PID.h"
 #include <iostream>
-#include <numeric>
+#include <cmath>
+
 using namespace std;
 
-//==============================================================================
-//  @brief  PID::PID()
-//          Constructor for PID Class.
-//          
-//==============================================================================
 PID::PID() {}
 
-//==============================================================================
-//  @brief  PID::~PID()
-//          Destructor for PID Class.
-//          
-//==============================================================================
 PID::~PID() {}
 
-//==============================================================================
-//  @brief  PID::Init()
-//          Initialize the PID Controller.
-//          
-//  @param  double kp: Proportional control value 
-//          double ki: Integral control value
-//          double kd: Derivative control value
-//  @return: void
-//==============================================================================
+///=============================================================================
+///  @brief  PID::Init()
+///          Initialize the PID Controller.
+///          
+///  @param  kp: Proportional control value 
+///  @param  ki: Integral control value
+///  @param  kd: Derivative control value
+///
+///  @retval: void
+///=============================================================================
 void PID::Init( double Kp, double Ki, double Kd ) {
 
   this->Kp = Kp;
   this->Ki = Ki;
   this->Kd = Kd;
 
-  p_error = 0.0;
-  i_error = 0.0;
-  d_error = 0.0;
+  this->p_error = Kp;
+  this->i_error = Ki;
+  this->d_error = Kd;
 
+  this->tune_state = INCREASE_P;
+  this->next_state = INCREASE_P;
+  this->K_index = 0;
+  this->next_index = 0;
+  this->sample_index = 0;
+
+  cout << __func__ << " Kp: "<<Kp << " Ki: "<<Ki <<" Kd: "<<Kd << endl;
 }
 
-//==============================================================================
-//  @brief  PID::UpdateError()
-//          Update the PID error variables
-//          
-//  @param  double cte: Cross Track Error
-//  @return: void
-//==============================================================================
+///=============================================================================
+///  @brief  PID::UpdateError()
+///          Update the PID error variables
+///          
+///  @param  cte: Cross Track Error
+///
+///  @retval: void
+///=============================================================================
 void PID::UpdateError( double cte ) {
 
-  double prev_cte = p_error;
+  double prev_cte = this->p_error;
 
-  p_error  = cte;
-  i_error += cte;
-  d_error  = cte - prev_cte;
+  // Integral windup Limit
+  double i_error_max = 100.0;
+  double i_limit = (this->i_error + cte) < i_error_max;
+
+  this->p_error = cte;
+  this->i_error = (i_limit) ? this->i_error+cte : this->i_error;
+  this->d_error = cte - prev_cte;
 }
 
-//==============================================================================
-//  @brief  PID::TotalError()
-//          Update the PID error variables
-//          
-//  @param  None
-//  @return: double total_error 
-//==============================================================================
-double PID::TotalError() {
+///=============================================================================
+///  @brief  PID::AutoTuneController()
+///          Update the PID error variables
+///          
+///  @param  cte: Cross Track Error
+///
+///  @retval: void
+///=============================================================================
+void PID::AutoTuneController( double cte ) {
 
-  double steer_value;
+  this->p = { this->Kp, this->Ki, this->Kd };
+  this->dp= { this->p_error, this->i_error, this->d_error };
 
-  steer_value = -Kp*p_error - Ki*i_error - Kd*d_error;
+  cout << __func__ <<":"<< __LINE__ << " p,i,d errors:" << this->p_error << " "<< this->i_error  << " " << this->d_error << endl;
+  cout << __func__ <<":"<< __LINE__ << " P values " << this->p[0] << " "<< this->p[1]  << " " << this->p[2] << endl;
+
+  switch ( this->tune_state ) 
+  {
+    case INCREASE_P:
+      this->p[ this->K_index ] += this->dp[ this->K_index ];
+      this->next_state = RESAMPLE_P;
+      cout << __LINE__ << " K_index, p[kp]: " << this->K_index << " " << this->p[K_index] << endl;
+      cout << __LINE__ << " States (current, next): " << this->tune_state << " " << this->next_state << endl;
+      break;
+
+    case RESAMPLE_P:
+      if( fabs( cte ) < fabs( this->best_error ) ) {
+        this->best_error = cte;
+        this->dp[ this->K_index ] *= 1.1;
+        this->next_state = INCREASE_P;
+        this->next_index = ( this->next_index + 1 ) % 2;
+      }
+      else {
+        this->next_state = DECREASE_2P;
+      }
+      cout << __LINE__ << " K_index, p[K_index]: " << this->K_index << " " << this->p[K_index] << endl;
+      cout << __LINE__ << " States (current, next): " << this->tune_state << " " << this->next_state << endl;
+      break;
+
+    case DECREASE_2P:
+      this->p[ this->K_index ] -= 2 * this->dp[ this->K_index ];
+      this->next_state = RESAMPLE_2P;
+      cout << __LINE__ << " K_index, p[K_index]: " << this->K_index << " " << this->p[K_index] << endl;
+      cout << __LINE__ << " States (current, next): " << this->tune_state << " " << this->next_state << endl;
+      break;
+
+    case RESAMPLE_2P:
+      if( fabs( cte ) < fabs( this->best_error ) ) {
+        this->best_error = cte;
+        this->dp[ this->K_index ] *= 1.1;
+      }
+      else {
+        this->p[ this->K_index ] += this->dp[ this->K_index ];
+        this->dp[ this->K_index ] *= 0.9;
+      }
+      this->next_state = INCREASE_P;
+      this->next_index = ( this->next_index + 1 ) % 2;
+      cout << __LINE__ << " K_index, p[K_index]: " << this->K_index << " " << this->p[K_index] << endl;
+      cout << __LINE__ << " States (current, next): " << this->tune_state << " " << this->next_state << endl;
+      break;
+
+    default:
+      cout << "Unknown State: " << this->tune_state << endl;
+      this->next_state = INCREASE_P;
+      break;
+  }
+
+  this->p_error = this->dp[0];
+  this->i_error = this->dp[1];
+  this->d_error = this->dp[2];
+
+  this->Kp = this->p[0];
+  this->Ki = this->p[1];
+  this->Kd = this->p[2];
+  cout << __func__ <<":"<< __LINE__ << " p,i,d errors:" << this->p_error << " "<< this->i_error  << " " << this->d_error << endl;
+  cout << __func__ <<":"<< __LINE__ << " P values " << this->p[0] << " "<< this->p[1]  << " " << this->p[2] << endl;
   
-  // limit the steer angle between 1 to -1
-  if( steer_value > 1 ) {
+}
+
+///=============================================================================
+///  @brief  PID::GetSteerValue()
+///          Get the PID error aka steering angle value 
+///          
+///  @param  None
+///
+///  @retval: Steer Value 
+///=============================================================================
+double PID::GetSteerValue() {
+
+  double steer_value, value;
+
+	value = -Kp * this->p_error - Kd * this->d_error - Ki * this->i_error;
+  
+  // Limit the steer angle between 1 to -1
+  if( value > 1 ) {
     steer_value = 1;
   }
-  else if ( steer_value < -1 ) {
+  else if ( value < -1 ) {
     steer_value = -1;
+  }
+  else {
+    steer_value = value;
   }
   
   return steer_value;
 }
-
-//======================================================================
-//  @brief  PID::FindCoefficients()
-//          Find Optimum PID coefficient (Kp, Ki, Kd)
-//          
-//  @param:  current cross track error
-//  @return: void 
-//==============================================================================
-void PID::FindCoefficients( const double total_error ) {
-
-	double *p;
-	double *dp;
-  int param = 0;
-  auto error = total_error;
-  auto best_error = 1000.0;
-  dp = &Kp; 
-  
-  while( best_error > 0.001 )
-  {
-    param = ( param + 1 ) % 3;
-    switch( param )
-    {
-      case Kp_PARAM:
-	  	  p = &Kp;
-        break;
-      case Ki_PARAM:
-	  	  p = &Ki;
-        break;
-      case Kd_PARAM:
-	  	  p = &Kd;
-        break;
-      default:
-        break;
-    }
-    
-    // TODO finish this function
-    if( error < best_error ) 
-    {
-      best_error = error;
-      *dp *= 1.1;
-	  }
-	  else 
-    {
-      *p += *dp;
-      *dp *= 0.9;
-    }
-  }  
-
-  error = 0.0;
-}
-

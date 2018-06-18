@@ -28,12 +28,28 @@ std::string hasData(std::string s) {
   return "";
 }
 
-int main()
+int main( int argc, char *argv[] )
 {
   uWS::Hub h;
+  double Kp_in, Ki_in, Kd_in;
 
   PID pid;
-  // TODO: Initialize the pid variable.
+  
+  // Do argparse to get coefficients
+  if( argc == 4 ) {
+    Kp_in = atof( argv[1] );
+    Ki_in = atof( argv[2] );
+    Kd_in = atof( argv[3] );
+    std::cout << __func__ << __LINE__<< " Kp_in: "<<Kp_in << " Ki_in: "<<Ki_in <<" Kd_in: "<<Kd_in << std::endl;
+  }
+  else {
+    // Use known good coefficients
+    Kp_in = 0.1;
+    Ki_in = 0.0001;
+    Kd_in = 0.5;
+    std::cout << __func__ << __LINE__<< " Kp_in: "<<Kp_in << " Ki_in: "<<Ki_in <<" Kd_in: "<<Kd_in << std::endl;
+  }
+  pid.Init( Kp_in, Ki_in, Kd_in );
 
   h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -41,31 +57,32 @@ int main()
     // The 2 signifies a websocket event
     if (length && length > 2 && data[0] == '4' && data[1] == '2')
     {
-      auto s = hasData(std::string(data).substr(0, length));
+      auto s = hasData(std::string(data));
       if (s != "") {
         auto j = json::parse(s);
         std::string event = j[0].get<std::string>();
         if (event == "telemetry") {
           // j[1] is the data JSON object
           double cte = std::stod(j[1]["cte"].get<std::string>());
-          //double speed = std::stod(j[1]["speed"].get<std::string>());
-          //double angle = std::stod(j[1]["steering_angle"].get<std::string>());
-          
-          double steer_value;
-          pid.UpdateError(cte);
-          steer_value = pid.TotalError();
+          double speed = std::stod(j[1]["speed"].get<std::string>());
+          double angle = std::stod(j[1]["steering_angle"].get<std::string>());
+          std::cout<<std::endl;
+          std::cout <<"main: "<<__LINE__ << " cte: "<<cte << " speed: "<<speed <<" angle: "<<angle << std::endl;
+
+          pid.UpdateError( cte );
+          double steer_value = pid.GetSteerValue();
+
+          pid.sample_index = ( pid.sample_index + 1 ) % pid.sample_interval;
+          if( ( pid.sample_index == pid.sample_interval-1 ) && 
+                fabs(steer_value) > pid.TOLERANCE ) {
+              std::cout <<"main: calling TuneController "<<"<<steer_value "<< fabs(steer_value) << std::endl;
+              //pid.AutoTuneController( cte );
+          }
 
           // DEBUG
+          std::cout << " p_error, i_error, d_error:" << pid.p_error << ":"<< pid.i_error  << ":" << pid.d_error << std::endl;
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
-          pid.eval_count++;
-
-          // Evaluate accumulated CTE every 200 iterations and adjust parameters accordingly.
-          if( pid.eval_count % pid.num_evals == 0) 
-          {
-          	pid.FindCoefficients( steer_value );
-          }
-                                  
           json msgJson;
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = 0.3;
