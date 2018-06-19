@@ -25,13 +25,16 @@ public:
   double Ki;
   double Kd;
 
+  // Constant Defines
   const double TOLERANCE = 0.01;
-  double best_error = 999.9;
+  const double Ki_WINDUP_LIMIT = 40.0;
   const int sample_interval = 50;
+
+  // AutoTuneController variables
+  double best_error = 999.9;
   int sample_index;
   std::vector<double> p;
   std::vector<double> dp;
-
   int tune_state;
   int next_state;
   int K_index;

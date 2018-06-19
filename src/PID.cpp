@@ -49,12 +49,10 @@ void PID::UpdateError( double cte ) {
 
   double prev_cte = this->p_error;
 
-  // Integral windup Limit
-  double i_error_max = 100.0;
-  double i_limit = (this->i_error + cte) < i_error_max;
+  double under_windup_limit = ( this->i_error + cte ) < Ki_WINDUP_LIMIT;
 
   this->p_error = cte;
-  this->i_error = (i_limit) ? this->i_error+cte : this->i_error;
+  this->i_error = ( under_windup_limit ) ? this->i_error+cte : 0;
   this->d_error = cte - prev_cte;
 }
 

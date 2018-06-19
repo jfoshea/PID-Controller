@@ -45,7 +45,7 @@ int main( int argc, char *argv[] )
   else {
     // Use known good coefficients
     Kp_in = 0.1;
-    Ki_in = 0.0001;
+    Ki_in = 0.0003;
     Kd_in = 0.5;
     std::cout << __func__ << __LINE__<< " Kp_in: "<<Kp_in << " Ki_in: "<<Ki_in <<" Kd_in: "<<Kd_in << std::endl;
   }
@@ -80,7 +80,7 @@ int main( int argc, char *argv[] )
           }
 
           // DEBUG
-          std::cout << " p_error, i_error, d_error:" << pid.p_error << ":"<< pid.i_error  << ":" << pid.d_error << std::endl;
+          std::cout << "p_error, i_error, d_error : " << pid.p_error << " : "<< pid.i_error  << " : " << pid.d_error << std::endl;
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
           json msgJson;
