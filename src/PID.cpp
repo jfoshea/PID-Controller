@@ -132,7 +132,10 @@ void PID::AutoTuneController( double cte ) {
   this->Kd = this->p[2];
   cout << __func__ <<":"<< __LINE__ << " p,i,d errors:" << this->p_error << " "<< this->i_error  << " " << this->d_error << endl;
   cout << __func__ <<":"<< __LINE__ << " P values " << this->p[0] << " "<< this->p[1]  << " " << this->p[2] << endl;
-  
+ 
+  // Update state and index for next iteration
+  this->tune_state = this->next_state;
+  this->K_index = this->next_index;
 }
 
 ///=============================================================================
